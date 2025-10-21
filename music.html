@@ -1,0 +1,442 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>rezFlix • by ruwaid cool</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+
+    <!-- Deezer-like font -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;700&display=swap" rel="stylesheet">
+
+    <!-- Video.js + playlist UI -->
+    <link href="https://unpkg.com/video.js@8/dist/video-js.min.css" rel="stylesheet" />
+    <link href="https://unpkg.com/videojs-playlist-ui@5/dist/videojs-playlist-ui.css" rel="stylesheet" />
+
+    <style>
+      :root{
+        --font: "Space Grotesk", system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+        --bg:#0b0b0f; --panel:#111218; --panel2:#151622; --card:#171828;
+        --text:#f2f3f7; --muted:#b7b8c6; --brand:#ef5466; --accent:#26283a; --ok:#0ea5e9;
+      }
+      *{ box-sizing:border-box; }
+      html,body{ height:100%; }
+      body{ margin:0; background:var(--bg); color:var(--text); font-family:var(--font); }
+
+      header{
+        display:flex; gap:14px; align-items:center; justify-content:space-between;
+        padding:14px 16px; position:sticky; top:0; z-index:20; background:rgba(11,11,15,.75); backdrop-filter: blur(6px);
+        border-bottom:1px solid rgba(255,255,255,.06);
+      }
+      .brand{ line-height:1.05; }
+      .title{ font-weight:700; letter-spacing:.2px; font-size:18px; }
+      .sub{ font-weight:300; font-size:12px; color:var(--muted); margin-top:2px; }
+      .rez{ opacity:.95; }
+      .by{ opacity:.85; }
+
+      .actions{ display:flex; gap:10px; align-items:center; width:min(720px, 64vw); }
+      .search{ flex:1; display:flex; align-items:center; gap:8px; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.1); border-radius:10px; padding:8px 10px; }
+      .search input{ flex:1; background:transparent; border:none; outline:none; color:var(--text); font:400 14px/1 var(--font); }
+      select.sort{
+        background:rgba(255,255,255,.06); color:var(--text); border:1px solid rgba(255,255,255,.1);
+        padding:8px 10px; border-radius:10px; font:500 13px/1 var(--font);
+      }
+      .btn{ background:var(--brand); color:#fff; border:none; padding:10px 14px; border-radius:8px; text-decoration:none; font-weight:700; letter-spacing:.2px; }
+
+      .wrap{ display:grid; grid-template-columns:1fr 320px; gap:16px; padding:12px 16px 16px; }
+      .player{ position:relative; background:#000; border-radius:12px; overflow:hidden; }
+      .sidebar{ background:var(--panel); border-radius:12px; overflow:auto; max-height:70vh; }
+
+      /* Video scaling */
+      .video-js, .video-js .vjs-tech { width:100% !important; height:100% !important; }
+      .video-js .vjs-tech { object-fit: contain; background:#000; }
+
+      /* Responsive player height */
+      #player { height: 62vh !important; }
+      @media (max-width:900px){ #player { height: 42vh !important; } }
+
+      /* Fill mode */
+      .fill-mode { position:fixed; inset:66px 0 0 0; z-index:10; border-radius:0 !important; }
+      .fill-toggle{
+        position:absolute; left:14px; bottom:14px; z-index:6;
+        padding:6px 10px; border-radius:8px; background:rgba(0,0,0,.35);
+        color:#fff; border:1px solid rgba(255,255,255,.1); font:300 12px/1.2 var(--font);
+      }
+
+      /* Playlist skin */
+      .vjs-playlist{ background:transparent; }
+      .vjs-playlist .vjs-playlist-item{ border-bottom:1px solid rgba(255,255,255,.06); }
+      .vjs-playlist .vjs-selected{ background:var(--panel2); }
+
+      /* Player head (title + download) */
+      .player-head{
+        position:absolute; left:12px; right:12px; top:12px; z-index:7; display:flex; justify-content:space-between; align-items:center; gap:8px; pointer-events:none;
+      }
+      .player-head .pill{
+        pointer-events:auto; background:rgba(0,0,0,.45); border:1px solid rgba(255,255,255,.12); color:#fff; font:500 12px/1 var(--font);
+        padding:8px 10px; border-radius:999px;
+      }
+      .player-head .download{
+        pointer-events:auto; background:var(--brand); color:#fff; text-decoration:none; padding:8px 12px; border-radius:999px; font:700 12px/1 var(--font);
+      }
+
+      /* Letterbox polish */
+      .player::after{
+        content:""; position:absolute; inset:0;
+        background:radial-gradient(ellipse at center, rgba(0,0,0,0) 40%, rgba(0,0,0,.25) 100%);
+        pointer-events:none;
+      }
+
+      .rows{ padding:8px 16px 28px; }
+      .row-title{ margin:22px 2px 12px; font-size:18px; font-weight:700; display:flex; align-items:center; gap:10px; }
+      .cards{ display:grid; grid-auto-flow:column; grid-auto-columns:200px; gap:12px; overflow-x:auto; padding-bottom:6px; }
+      .card{ width:200px; cursor:pointer; border-radius:12px; background:var(--card); box-shadow:0 0 0 1px rgba(255,255,255,.06) inset; transition:.18s transform, .18s box-shadow; }
+      .card:hover{ transform:translateY(-2px); box-shadow:0 10px 28px rgba(0,0,0,.35), 0 0 0 1px rgba(255,255,255,.1) inset; }
+      .thumb{ width:100%; height:112px; object-fit:cover; border-radius:12px 12px 0 0; background:#222; display:block; }
+      .meta{ padding:8px 9px 10px; display:flex; justify-content:space-between; align-items:center; gap:8px; }
+      .name{ font-size:13px; font-weight:600; }
+      .dl{ background:#2b2b38; color:#fff; text-decoration:none; font:700 11px/1 var(--font); padding:6px 8px; border-radius:8px; white-space:nowrap; }
+
+      .empty{
+        display:flex; align-items:center; justify-content:center; height:100%;
+        color:#cfcfe6; font:400 14px/1 var(--font);
+      }
+
+      @media (max-width:900px){ .wrap{ grid-template-columns:1fr; } }
+
+      /* Splash */
+      .splash{
+        position:fixed; inset:0; background:radial-gradient(1200px 800px at 50% 30%, #181824 0%, #0b0b0f 60%);
+        display:flex; align-items:center; justify-content:center; flex-direction:column;
+        z-index:50; color:#fff;
+      }
+      .splash .logo{ font:700 42px/1 var(--font); letter-spacing:.5px; }
+      .splash .made{ margin-top:10px; font:300 14px/1 var(--font); color:#cfcfe6; opacity:.9; }
+      .splash .hint{ margin-top:22px; font:300 12px/1 var(--font); color:#b7b8c6; opacity:.8; }
+      .splash.fade{ animation: fadeOut .6s ease forwards; }
+      @keyframes fadeOut { to { opacity:0; visibility:hidden; } }
+
+      /* Modal */
+      .modal{
+        position:fixed; inset:0; background:rgba(0,0,0,.6); display:none; align-items:center; justify-content:center; z-index:60;
+      }
+      .modal.show{ display:flex; }
+      .sheet{
+        width:min(720px, 92vw); background:#0f1017; color:#fff; border:1px solid rgba(255,255,255,.1);
+        border-radius:14px; overflow:hidden; box-shadow:0 20px 60px rgba(0,0,0,.55);
+      }
+      .sheet-head{ display:flex; gap:12px; padding:14px; border-bottom:1px solid rgba(255,255,255,.08); }
+      .sheet-head img{ width:110px; height:150px; object-fit:cover; border-radius:10px; background:#222; }
+      .sheet-meta{ display:flex; flex-direction:column; justify-content:center; gap:6px; }
+      .sheet-title{ font:700 18px/1.2 var(--font); }
+      .sheet-sub{ font:300 12px/1.2 var(--font); color:#c9c9da; }
+      .sheet-body{ padding:14px; display:grid; grid-template-columns:1fr 220px; gap:14px; }
+      .sheet-actions{ display:flex; gap:10px; flex-wrap:wrap; }
+      .act{ background:var(--ok); color:#001018; border:none; padding:10px 12px; border-radius:10px; font:700 13px/1 var(--font); cursor:pointer; }
+      .dl2{ background:var(--brand); color:#fff; text-decoration:none; padding:10px 12px; border-radius:10px; font:700 13px/1 var(--font); }
+      .sheet-imdb{ background:#121323; border:1px solid rgba(255,255,255,.08); border-radius:10px; padding:10px; }
+      .sheet-imdb h4{ margin:0 0 6px 0; font:700 14px/1 var(--font); }
+      .sheet-imdb .p{ font:300 12px/1.5 var(--font); color:#d7d7e6; }
+      .sheet-foot{ padding:10px 14px; border-top:1px solid rgba(255,255,255,.08); display:flex; justify-content:flex-end; }
+      .close{ background:#2b2b38; color:#fff; padding:8px 12px; border-radius:10px; font:700 12px/1 var(--font); cursor:pointer; }
+    </style>
+  </head>
+  <body>
+    <!-- Splash -->
+    <div class="splash" id="splash">
+      <div class="logo">Rez Flix</div>
+      <div class="made">Made by RuwaidCool</div>
+      <div class="hint">Click anywhere to continue</div>
+    </div>
+
+    <header>
+      <div class="brand">
+        <div class="title">My Movies</div>
+        <div class="sub"><span class="rez">rezFlix</span> <span class="by">by ruwaid cool</span></div>
+      </div>
+      <div class="actions">
+        <div class="search">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="#cfcfe6" xmlns="http://www.w3.org/2000/svg"><path d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 10-.71.71l.27.28v.79l5 5 1.5-1.5-5-5zm-6 0A4.5 4.5 0 1114 9.5 4.5 4.5 0 019.5 14z"/></svg>
+          <input id="searchBox" type="text" placeholder="Search movies or resolution..." />
+        </div>
+        <select class="sort" id="sortSel">
+          <option value="az">Sort: A → Z</option>
+          <option value="za">Sort: Z → A</option>
+          <option value="new">Sort: Newest first</option>
+          <option value="res">Sort: Resolution High → Low</option>
+        </select>
+        <a class="btn" target="_blank" href="https://t.me/VijayFilterTG_BoT?start=afFile-Njg0NjYyMTk4NCZBZ0FEendFQUFtUEptVVE=">Message bot</a>
+      </div>
+    </header>
+
+    <div class="wrap">
+      <div class="player" id="playerWrap">
+        <!-- Player title/download overlay -->
+        <div class="player-head" id="playerHead" style="display:none;">
+          <div class="pill" id="nowTitle"></div>
+          <a class="download" id="nowDownload" href="#" target="_blank" rel="noopener">Download</a>
+        </div>
+
+        <video id="player" class="video-js vjs-default-skin" controls playsinline preload="metadata" data-setup="{}">
+          <p class="vjs-no-js">Enable JavaScript to view the player.</p>
+        </video>
+
+        <button class="fill-toggle" id="fillBtn">Fill</button>
+
+        <!-- Empty state overlay -->
+        <div class="empty" id="emptyState">Select a movie to play</div>
+      </div>
+
+      <div class="sidebar">
+        <div class="vjs-playlist"></div>
+      </div>
+    </div>
+
+    <section class="rows">
+      <h3 class="row-title">Recently added</h3>
+      <div class="cards" id="cards"></div>
+    </section>
+
+    <!-- Details Modal -->
+    <div class="modal" id="modal">
+      <div class="sheet">
+        <div class="sheet-head">
+          <img id="mPoster" src="" alt="poster" onerror="this.src='https://via.placeholder.com/500x750/111218/FFFFFF?text=Poster'">
+          <div class="sheet-meta">
+            <div class="sheet-title" id="mTitle"></div>
+            <div class="sheet-sub" id="mSub"></div>
+            <div class="sheet-actions">
+              <button class="act" id="mPlay">Play now</button>
+              <a class="dl2" id="mDownload" href="#" target="_blank" rel="noopener">Open download</a>
+            </div>
+          </div>
+        </div>
+        <div class="sheet-body">
+          <div class="sheet-imdb">
+            <h4>IMDb</h4>
+            <div class="p" id="mPlot">No summary added yet.</div>
+            <div style="margin-top:8px;">
+              <a id="mImdb" class="dl2" href="#" target="_blank" rel="noopener">Open on IMDb</a>
+            </div>
+          </div>
+          <div class="sheet-imdb">
+            <h4>Stream</h4>
+            <div class="p">Streams directly in the player using the original download link.</div>
+            <div class="p" style="margin-top:6px; color:#8ee1ff;">Tip: For the best audio compatibility, prefer MP4 (H.264/AAC).</div>
+          </div>
+        </div>
+        <div class="sheet-foot">
+          <button class="close" id="mClose">Close</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="https://unpkg.com/video.js@8/dist/video.min.js"></script>
+    <script src="https://unpkg.com/videojs-playlist@5/dist/videojs-playlist.min.js"></script>
+    <script src="https://unpkg.com/videojs-playlist-ui@5/dist/videojs-playlist-ui.min.js"></script>
+    <script>
+      const fallbackPoster = 'https://via.placeholder.com/500x750/111218/FFFFFF?text=Poster';
+      const P = (url) => url || fallbackPoster;
+      const resScore = (r) => { const m = (r||'').match(/(\d{3,4})p/i); return m ? parseInt(m[1],10) : 0; };
+
+      // Use Wikimedia or Google Images for posters; add imdbUrl and plot for the modal.
+      const base = [
+        { name:"C V Master (2021)", resolution:"720p",
+          src:"https://tgfilestreambot.koyeb.app/dl/68cbb90688255ba08cccd8cf/@C_V%20Master%20(2021)%20Tamil%20HDRip.mkv",
+          poster:"https://upload.wikimedia.org/wikipedia/en/7/7e/Master_2021_poster.jpg",
+          imdbUrl:"https://www.imdb.com/title/tt10579952/", plot:"A troubled professor is sent to a juvenile school, where he clashes with a gangster who uses children for crime." },
+
+        { name:"DON (2022)", resolution:"720p",
+          src:"https://compressed-estimates-cardiff-class.trycloudflare.com/dl/68ce84e63bd34c09fff97183",
+          poster:"https://upload.wikimedia.org/wikipedia/en/6/6a/Don_2022_poster.jpg",
+          imdbUrl:"https://www.imdb.com/title/tt13349698/", plot:"A carefree college student must discover his passion while navigating friendship, love, and family expectations." },
+
+        { name:"Bigil (2019)", resolution:"1080p",
+          src:"https://compressed-estimates-cardiff-class.trycloudflare.com/dl/68cee2ff3bd34c09fff971a1",
+          poster:"https://upload.wikimedia.org/wikipedia/en/1/15/Bigil_poster.jpg",
+          imdbUrl:"https://www.imdb.com/title/tt9266608/", plot:"A former footballer returns as a coach to help a women’s team reach their potential against all odds." },
+
+        { name:"Petta (2019)", resolution:"1080p",
+          src:"https://compressed-estimates-cardiff-class.trycloudflare.com/dl/68e2228d4e8ca7bd7aa3ca09",
+          poster:"https://upload.wikimedia.org/wikipedia/en/3/3a/Petta_poster.jpg",
+          imdbUrl:"https://www.imdb.com/title/tt8291224/", plot:"A mysterious warden’s past catches up with him, leading to stylish showdowns and revenge." },
+
+        { name:"Thuppakki (2012)", resolution:"720p",
+          src:"https://compressed-estimates-cardiff-class.trycloudflare.com/dl/68e93d0756eb9390e470a0b3",
+          poster:"https://upload.wikimedia.org/wikipedia/en/2/2e/Thuppakki_poster.jpg",
+          imdbUrl:"https://www.imdb.com/title/tt2187153/", plot:"An army captain hunts a terrorist sleeper cell orchestrating attacks in Mumbai." },
+
+        { name:"Thuppakki (2012)", resolution:"1080p",
+          src:"https://compressed-estimates-cardiff-class.trycloudflare.com/dl/68e93d6656eb9390e470a0b4",
+          poster:"https://upload.wikimedia.org/wikipedia/en/2/2e/Thuppakki_poster.jpg",
+          imdbUrl:"https://www.imdb.com/title/tt2187153/", plot:"An army captain hunts a terrorist sleeper cell orchestrating attacks in Mumbai." },
+
+        { name:"Remo (2016)", resolution:"1080p",
+          src:"https://compressed-estimates-cardiff-class.trycloudflare.com/dl/68ea8b7856eb9390e470a24d",
+          poster:"https://upload.wikimedia.org/wikipedia/en/d/d6/Remo_poster.jpg",
+          imdbUrl:"https://www.imdb.com/title/tt5716464/", plot:"An aspiring actor disguises himself as a nurse to win over the woman he loves." },
+
+        { name:"Remo (2016)", resolution:"1080p",
+          src:"https://compressed-estimates-cardiff-class.trycloudflare.com/dl/68ea8d5656eb9390e470a252",
+          poster:"https://upload.wikimedia.org/wikipedia/en/d/d6/Remo_poster.jpg",
+          imdbUrl:"https://www.imdb.com/title/tt5716464/", plot:"An aspiring actor disguises himself as a nurse to win over the woman he loves." },
+
+        { name:"Varalaru (2006)", resolution:"1080p",
+          src:"https://compressed-estimates-cardiff-class.trycloudflare.com/dl/68f21ea056eb9390e470a8bd",
+          poster:"https://upload.wikimedia.org/wikipedia/en/3/3f/Varalaru_poster.jpg",
+          imdbUrl:"https://www.imdb.com/title/tt0481452/", plot:"A wealthy man’s son grapples with complex family secrets that shape his identity." },
+
+        { name:"Spider‑Man (2002)", resolution:"1080p",
+          src:"https://compressed-estimates-cardiff-class.trycloudflare.com/dl/68f3adb86261c3ba5dd98ef8",
+          poster:"https://upload.wikimedia.org/wikipedia/en/f/f3/Spider-Man2002Poster.jpg",
+          imdbUrl:"https://www.imdb.com/title/tt0145487/", plot:"Peter Parker becomes Spider‑Man and faces the Green Goblin while balancing life and love." },
+
+        { name:"Spider‑Man 2 (2004)", resolution:"1080p",
+          src:"https://compressed-estimates-cardiff-class.trycloudflare.com/dl/68f4bc7b6261c3ba5dd98ff0",
+          poster:"https://upload.wikimedia.org/wikipedia/en/4/4f/Spider-Man_2_Poster.jpg",
+          imdbUrl:"https://www.imdb.com/title/tt0316654/", plot:"Peter struggles with responsibility as Doctor Octopus threatens New York." }
+      ];
+
+      let working = [...base];
+      let filtered = [...base];
+
+      // Player
+      const player = videojs('player');
+      const emptyState = document.getElementById('emptyState');
+      const playerHead = document.getElementById('playerHead');
+      const nowTitle = document.getElementById('nowTitle');
+      const nowDownload = document.getElementById('nowDownload');
+
+      function loadPlaylist(items){
+        player.playlist(items.map(item => ({
+          name: `${item.name} ${item.resolution}`,
+          poster: P(item.poster),
+          sources: [{ src: item.src, type: "video/mp4" }]
+        })));
+        player.playlistUi({ playOnSelect: true });
+        emptyState.style.display = 'flex';
+        playerHead.style.display = 'none';
+      }
+
+      player.on('playlistitem', function(){
+        const idx = player.playlist.currentItem();
+        const item = filtered[idx];
+        if (item){
+          nowTitle.textContent = `${item.name} • ${item.resolution}`;
+          nowDownload.href = item.src;
+          emptyState.style.display = 'none';
+          playerHead.style.display = 'flex';
+        }
+      });
+
+      // Cards and selection -> open modal with choices
+      const cards = document.getElementById('cards');
+      const modal = document.getElementById('modal');
+      const mPoster = document.getElementById('mPoster');
+      const mTitle = document.getElementById('mTitle');
+      const mSub = document.getElementById('mSub');
+      const mDownload = document.getElementById('mDownload');
+      const mImdb = document.getElementById('mImdb');
+      const mPlot = document.getElementById('mPlot');
+      const mPlay = document.getElementById('mPlay');
+      const mClose = document.getElementById('mClose');
+
+      let currentModalItem = null;
+
+      function openModal(item){
+        currentModalItem = item;
+        mPoster.src = P(item.poster);
+        mTitle.textContent = item.name;
+        mSub.textContent = `Resolution: ${item.resolution}`;
+        mDownload.href = item.src;
+        mImdb.href = item.imdbUrl || '#';
+        mPlot.textContent = item.plot || 'No summary added yet.';
+        modal.classList.add('show');
+      }
+      function closeModal(){ modal.classList.remove('show'); }
+
+      mClose.addEventListener('click', closeModal);
+      modal.addEventListener('click', (e)=>{ if(e.target===modal){ closeModal(); } });
+      mPlay.addEventListener('click', ()=>{
+        if(!currentModalItem) return;
+        // Ensure playlist reflects current filtered set
+        const idx = filtered.findIndex(f => f.src === currentModalItem.src);
+        if(idx>=0){
+          player.playlist.currentItem(idx);
+          player.play();
+          window.scrollTo({ top:0, behavior:'smooth' });
+        }
+        closeModal();
+      });
+
+      function renderCards(items){
+        cards.innerHTML = '';
+        items.forEach((item) => {
+          const el = document.createElement('div');
+          el.className = 'card';
+          el.innerHTML = `
+            <img class="thumb" src="${P(item.poster)}" alt="${item.name}"
+                 onerror="this.src='${fallbackPoster}'">
+            <div class="meta">
+              <div class="name">${item.name} • ${item.resolution}</div>
+              <a class="dl" href="${item.src}" target="_blank" rel="noopener">Download</a>
+            </div>
+          `;
+          el.addEventListener('click', () => openModal(item));
+          cards.appendChild(el);
+        });
+      }
+
+      // Search + Sort
+      const searchBox = document.getElementById('searchBox');
+      const sortSel = document.getElementById('sortSel');
+
+      const resScoreFn = (x)=> resScore(x.resolution);
+
+      function applySearch(){
+        const s = searchBox.value.trim().toLowerCase();
+        filtered = !s ? [...working] : working.filter(x => (x.name + ' ' + x.resolution).toLowerCase().includes(s));
+      }
+      function applySort(){
+        const mode = sortSel.value;
+        if(mode === 'az'){
+          working.sort((a,b)=> a.name.localeCompare(b.name));
+        } else if(mode === 'za'){
+          working.sort((a,b)=> b.name.localeCompare(a.name));
+        } else if(mode === 'new'){
+          working = [...base].reverse();
+        } else if(mode === 'res'){
+          working.sort((a,b)=> resScoreFn(b) - resScoreFn(a));
+        }
+      }
+      function refresh(){
+        applySort();
+        applySearch();
+        loadPlaylist(filtered);
+        renderCards(filtered);
+      }
+
+      // Initial
+      refresh();
+      searchBox.addEventListener('input', refresh);
+      sortSel.addEventListener('change', refresh);
+
+      // Fill mode
+      const wrap = document.getElementById('playerWrap');
+      const fillBtn = document.getElementById('fillBtn');
+      let fill = false;
+      fillBtn.onclick = () => {
+        fill = !fill;
+        wrap.classList.toggle('fill-mode', fill);
+        fillBtn.textContent = fill ? 'Exit Fill' : 'Fill';
+      };
+
+      // Splash dismiss
+      const splash = document.getElementById('splash');
+      const dismiss = () => splash.classList.add('fade');
+      splash.addEventListener('click', dismiss);
+      setTimeout(dismiss, 1200);
+    </script>
+  </body>
+</html>
